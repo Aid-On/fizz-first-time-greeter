@@ -1,0 +1,70 @@
+// fizz_first_time_greeter — 初見ユーザへの決定論的な自己紹介。
+//
+// 責務 (一行): 初見の人に、1 回だけ・少し間を置いて自己紹介を出す。
+//
+// 旧 openaituber chat/aituber.ts の first-time intro の移植。
+//   - 初見判定 (recall の attendanceFlavor == first_time) はオーケストレータ
+//     が memory 部品から取得して is_first_time として渡す。
+//   - 「初コメと同時には喋らない」: INTRO_DELAY_MS 待ってから出す。実際の
+//     待機/スケジューリングはオーケストレータの責務 (この部品は遅延値を
+//     定数で提供するだけ)。
+//   - 二重発火防止: per-user の delivered 集合で「もう挨拶したか」を管理。
+//     (永続化レイテンシで同一初見ユーザの 2 コメントが至近で来ても 1 回)
+//
+// 入力 → 出力: (is_first_time, delivered, user) → 挨拶を出すか + 挨拶フラグメント列
+
+import fizz_protocol.speak
+import fizz_protocol.emotion
+
+// 初コメ着弾から自己紹介開始までの間 (ms)。スケジューリングは呼び出し側。
+let INTRO_DELAY_MS = 10000
+
+// 決定論的な自己紹介 (空澄ラムネ persona)。LLM を介さず固定文。
+fn intro_fragments() -> List[speak.SentenceFragment] = [
+  frag(emotion.Happy,   "こんにちは〜! 初見さん、見つけてくれてありがとね。"),
+  frag(emotion.Relaxed, "わたし、空澄ラムネっていうの。"),
+  frag(emotion.Relaxed, "まったり雑談しながら、みんなを癒したい AIVTuber だよ。"),
+  frag(emotion.Happy,   "いっぱい話すの好きだから、気軽にコメントしてくれると嬉しいな。"),
+  frag(emotion.Neutral, "今日から仲良くしてね。"),
+]
+
+local fn frag(e: emotion.Emotion, text: String) -> speak.SentenceFragment =
+  speak.SentenceFragment { emotion: e, message: text, hair: none, fx: none }
+
+// 初見かつ未挨拶なら true。
+fn should_greet(is_first_time: Bool, delivered: Set[String], user: String) -> Bool =
+  is_first_time and not set.contains(delivered, user)
+
+// 挨拶済みとして記録した新しい集合を返す。
+fn mark_delivered(delivered: Set[String], user: String) -> Set[String] =
+  set.insert(delivered, user)
+
+// ── in-file tests ────────────────────────────────────────────────────
+
+test "first-time unseen user should be greeted" {
+  let delivered: Set[String] = set.new()
+  assert(should_greet(true, delivered, "newbie"))
+}
+
+test "returning user is not greeted" {
+  let delivered: Set[String] = set.new()
+  assert(not should_greet(false, delivered, "regular"))
+}
+
+test "already-greeted first-timer is not greeted again" {
+  let delivered = mark_delivered(set.new(), "newbie")
+  assert(not should_greet(true, delivered, "newbie"))
+  // 別の初見はまだ挨拶対象
+  assert(should_greet(true, delivered, "another"))
+}
+
+test "intro is the deterministic five-line lime intro" {
+  let frags = intro_fragments()
+  assert_eq(list.len(frags), 5)
+  assert_eq(list.first(frags)!.emotion, emotion.Happy)
+  assert(string.contains(list.first(frags)!.message, "初見さん"))
+}
+
+test "delay constant is exposed" {
+  assert_eq(INTRO_DELAY_MS, 10000)
+}

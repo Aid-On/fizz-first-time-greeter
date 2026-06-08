@@ -1,0 +1,7 @@
+[package]
+name = "fizz_first_time_greeter"
+version = "0.1.0"
+description = "Fizz brain — deterministic self-intro for first-time viewers, fired once per user after a delay. first-seen -> intro fragments"
+
+[dependencies]
+fizz_protocol = { git = "https://github.com/Aid-On/fizz-protocol", tag = "v0.2.0" }
